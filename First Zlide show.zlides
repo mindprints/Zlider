@@ -1,0 +1,29 @@
+{
+  "version": "1.0",
+  "zlides": [
+    {
+      "id": 2495932990528,
+      "type": "browser",
+      "title": "Bandaider",
+      "data": "https://bandaider.xyz/leaderboard"
+    },
+    {
+      "id": 2101737960016,
+      "type": "browser",
+      "title": "Calendar",
+      "data": "https://calendar.google.com/calendar/u/0/r?tab=mc"
+    },
+    {
+      "id": 2101738053424,
+      "type": "browser",
+      "title": "Opencode",
+      "data": "https://opencode.ai/"
+    },
+    {
+      "id": 2379036108064,
+      "type": "browser",
+      "title": "Suno",
+      "data": "https://suno.com/create"
+    }
+  ]
+}

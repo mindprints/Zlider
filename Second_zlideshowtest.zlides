@@ -1,0 +1,47 @@
+{
+  "version": "1.0",
+  "zlides": [
+    {
+      "id": 2321836974480,
+      "type": "browser",
+      "title": "viaplay",
+      "data": "https://viaplay.se/player/default/sport/fotboll/premier-league/viaplay-premier-sunday-arsenal-man-united/s26011670521081281"
+    },
+    {
+      "id": 2321837020016,
+      "type": "browser",
+      "title": "messanger",
+      "data": "https://www.messenger.com/messenger_media?attachment_id=881942708141551&message_id=mid.%24gAByDyBtjEkSiJrRd-Gb9W8BTcUUa&thread_id=8026194824073796"
+    },
+    {
+      "id": 2321836912400,
+      "type": "browser",
+      "title": "eventbrite",
+      "data": "https://www.eventbrite.com/organizations/events"
+    },
+    {
+      "id": 2321836912672,
+      "type": "browser",
+      "title": "lmstudio",
+      "data": "https://lmstudio.ai/download"
+    },
+    {
+      "id": 2321797200976,
+      "type": "browser",
+      "title": "https://openrouter.ai/mistralai/pixtral-large-2411",
+      "data": "https://openrouter.ai/mistralai/pixtral-large-2411"
+    },
+    {
+      "id": 2321797196880,
+      "type": "browser",
+      "title": "perplexity",
+      "data": "https://www.perplexity.ai/search/what-ocr-capable-modes-can-i-g-tw0Bl4ZbRXSQ0KNG_NiGHA?sm=d"
+    },
+    {
+      "id": 2321797044880,
+      "type": "browser",
+      "title": "https://console.groq.com/playground",
+      "data": "https://console.groq.com/playground"
+    }
+  ]
+}
