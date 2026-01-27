@@ -2,7 +2,8 @@
 
 Zlider is a lightweight desktop presenter that lets you line up browser tabs, images, PDFs, MP3s, or any launchable file and open them one at a time from a single control window. The latest redesign (versions 15-20) removed the external controller, added a full presentation toolbar, and introduced a compact mini mode so navigation never gets in the way of the show.
 
-## Highlights
+## Highlightss and features
+
 
 - **Single-window controller** - Click `Start` to enter presentation mode, keep the app on top, and steer every zlide without juggling extra windows.
 - **One-at-a-time playback** - Zlides open individually (no more batch launches), eliminating the sync issues seen in the early proof of concept.
