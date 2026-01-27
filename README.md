@@ -1,24 +1,22 @@
-# Zlider - Presentation Zlideshow POC
+# Zlider - Presentation Zlideshow Tool
 
-Zlider is a lightweight desktop presenter that lets you line up browser tabs, images, PDFs, MP3s, or any launchable file and open them one at a time from a single control window. The latest redesign (versions 15-20) removed the external controller, added a full presentation toolbar, and introduced a compact mini mode so navigation never gets in the way of the show.
+Zlider is a lightweight desktop presenter that lets you line up browser tabs, images, PDFs, MP3s, desktop applications, or any launchable file and navigate them one at a time from a single control window. The intuitive dual-mode interface (full editor + compact mini mode) keeps navigation out of the way during presentations while providing full control.
 
-## Highlights and features
+## Highlights and Features
 
 - **Single-window controller** - Click `Start` to enter presentation mode, keep the app on top, and steer every zlide without juggling extra windows.
-- **One-at-a-time playback** - Zlides open individually (no more batch launches), eliminating the sync issues seen in the early proof of concept.
-- **Flexible media support** - Mix browser URLs and local files; Zlider defers to your OS associations so anything that opens normally will work here.
-- **Live zlide list** - Reorder, rename, or double-click any entry to jump to it. The active zlide is prefixed with `>` and highlighted in blue.
-- **Mini mode** - Toggle `Mini` or press `Esc` to shrink the controller to a 400x60 always-on-top strip that keeps the navigation buttons and counter visible.
-- **Status feedback** - A status bar and console logs confirm what is currently presenting, which is handy while rehearsing or debugging.
+- **One-at-a-time playback** - Zlides open individually with optional auto-close of the previous zlide for a cleaner workflow.
+- **Flexible media support** - Mix browser URLs, local files, and desktop applications; Zlider defers to your OS associations so anything that opens normally will work here.
+- **Live zlide list** - Reorder, rename, or double-click any entry to jump to it. The active zlide is prefixed with `▶` and highlighted.
+- **Mini mode** - Available both before and during presentation. Toggle `▼ Mini` or press `Esc` to shrink the controller to a compact always-on-top strip.
+- **Auto-close mode** - Optionally close the previous zlide automatically when navigating (works with apps, files, and browser windows).
+- **Quick Launch** - Open all zlides or selected zlides with a single click, plus a "Close All" button to clean up.
+- **Presentation timer** - Track elapsed time during your presentation with a built-in timer.
+- **Status feedback** - Window title, list frame header, and status bar show the current file and progress.
 
 ## Requirements
 
 - Python 3.10+ with Tkinter (bundled with the regular installers on Windows and macOS).
-- [`pynput`](https://pypi.org/project/pynput/) for upcoming keyboard automation helpers. Install it with:
-
-  ```bash
-  pip install pynput
-  ```
 
 Windows launches files with `os.startfile`, macOS uses `open`, and Linux uses `xdg-open`, so the same `.zlides` file works everywhere as long as the target assets exist.
 
@@ -29,66 +27,148 @@ python zlider.py
 ```
 
 1. Click **New** for a blank zlideshow or **Open** to load an existing `.zlides` file.
-2. Use **Add Browser Zlide** (auto-prefixes `https://` when missing) or **Add File Zlide** to build your run of show.
-3. Arrange entries with **Move Up/Down**, rename them with **Edit**, and save to a `.zlides` file whenever you like.
-4. Hit **Start** to switch into presentation mode.
+2. Use **Add Browser Zlide**, **Add File Zlide**, or **Add Application** to build your run of show.
+3. Arrange entries with **Move Up/Down**, rename them with **Edit**, and save to a `.zlides` file.
+4. Hit **▶ Start** to switch into presentation mode.
 
 ## Creating and Managing Zlides
 
-- **Browser zlide** - Provide a URL and Zlider will load it with your default browser when that zlide becomes active.
-- **File zlide** - Point to any local file; the OS opens it with its default application (images, PDFs, MP3s, slides, etc.).
-- **Reordering** - Keep your narrative intact with the Move buttons; the preview list always reflects the current order.
-- **Editing/Deleting** - Update titles or remove entries in place; changes are reflected immediately.
-- **Saving** - `.zlides` files are simple JSON so they play nicely with version control.
+| Zlide Type | Icon | Description |
+|------------|------|-------------|
+| **Browser** | 🌐 | Opens a URL in your default browser (auto-prefixes `https://` when missing) |
+| **File** | 📄 | Opens any local file with its default application (images, PDFs, MP3s, etc.) |
+| **Application** | 🖥️ | Launches a desktop application (.exe, .lnk shortcuts, .app) |
 
-Example snippet:
+### Zlide Management
+- **Reordering** - Keep your narrative intact with the Move Up/Down buttons
+- **Editing/Deleting** - Update titles or remove entries; changes are reflected immediately
+- **Multi-select** - Use Ctrl+click or Shift+click to select multiple zlides for batch operations
+- **Saving** - `.zlides` files are simple JSON so they play nicely with version control
+
+### File Format (v1.1)
 
 ```json
 {
-  "version": "1.0",
+  "version": "1.1",
+  "settings": {
+    "auto_close_mode": false
+  },
   "zlides": [
     { "id": 123, "type": "browser", "title": "Launch Video", "data": "https://example.com" },
-    { "id": 456, "type": "file", "title": "Intro Song", "data": "D:/Media/intro.mp3" }
+    { "id": 456, "type": "file", "title": "Intro Song", "data": "D:/Media/intro.mp3" },
+    { "id": 789, "type": "app", "title": "PowerPoint", "data": "C:/path/to/presentation.lnk" }
   ]
 }
 ```
 
+## Quick Launch
+
+The Quick Launch section provides batch operations:
+
+| Button | Action |
+|--------|--------|
+| **🚀 Open All Zlides** | Opens every zlide in the list at once (confirmation for 5+ items) |
+| **📂 Open Selected** | Opens only the currently highlighted zlides |
+| **❌ Close All Opened** | Closes all tracked opened processes |
+
+## Settings
+
+### Auto-Close Previous Zlide
+Enable the **🔄 Auto-close previous** checkbox to automatically close the previous zlide when navigating during a presentation:
+
+- **Browser zlides**: Opens each URL in a new browser window (not tab) for reliable closing
+- **Applications**: Terminates the launched process
+- **Files**: Closes if opened via subprocess
+
+The 🔄 indicator appears in the toolbar: **red** when active, **gray** when disabled.
+
 ## Presenting
 
-- Press **Start** to rebuild the toolbar with navigation controls, highlight the first zlide, and pin Zlider above other windows.
-- Toolbar actions: `<<` (jump to first), `< Prev`, `Next >`, `>>` (jump to last), `Mini/Full`, and `End`.
-- Each navigation action opens exactly one zlide, so content appears the moment you advance to it.
-- Double-click any item in the list during a presentation to jump directly to that point in the deck.
-- A counter such as `3/7` plus the blue highlight makes it clear where you are in the running order.
-- Click **End** to exit presentation mode and return to the full editor.
+1. Press **▶ Start** to enter presentation mode with navigation controls
+2. The window becomes always-on-top and displays:
+   - **Timer** - Elapsed time (MM:SS format)
+   - **Auto-close indicator** - 🔄 shows mode status
+   - **Navigation** - `◀◀` (first), `◀ Prev`, counter, `Next ▶`, `▶▶` (last)
+   - **Mode controls** - `▼ Mini`, `■ End`
+3. Each navigation action opens exactly one zlide
+4. Double-click any list entry to jump directly to that zlide
+5. Click **■ End** to exit presentation mode and return to the editor
 
-## Keyboard and Mouse Shortcuts
+## Mini Mode
 
-- Left / Right arrows - previous / next zlide.
-- Home / End - jump to first / last zlide.
-- Space - advance to the next zlide.
-- Escape - toggle mini mode while presenting.
-- Double-click list entry - jump to that zlide (works both in and out of presentation mode).
+Mini mode is available **both before and during presentations**:
 
-## Mini Mode Workflow
+### Editing Mini Mode
+```
+┌────────────────────────────────────────────────────────┐
+│  📋 filename                              X zlides     │
+│  [🚀 Open All] [📂 Selected] | [▶ Start] | [▲ Full]   │
+└────────────────────────────────────────────────────────┘
+```
+- Shows zlideshow name and zlide count
+- Quick access to Open All, Open Selected, and Start
+- Click **▲ Full** or press **Esc** to expand
 
-1. Start presenting, then click **Mini** or press `Esc`.
-2. The window collapses to a 400x60 bar that shows `<< | < | 3/7 | > | >> | Full | End` and stays on top.
-3. Use either the compact buttons or the keyboard shortcuts to keep advancing while the full list stays hidden.
-4. Click **Full** or press `Esc` again when you need to expand back to the editor.
+### Presentation Mini Mode
+```
+┌────────────────────────────────────────────────────────────────────┐
+│                        current zlide                    next ▶     │
+│  00:00 🔄 | [◀◀][◀]    1/6    [▶][▶▶] | [▲ Full] [■ End]         │
+└────────────────────────────────────────────────────────────────────┘
+```
+- Shows current, previous, and next zlide names
+- Full navigation controls with timer
+- Click **▲ Full** or press **Esc** to expand
 
-## Sample Flow
+## Keyboard Shortcuts
 
-1. Build a zlideshow with a mix of dashboards, websites, and local media.
-2. Rehearse by running through the entire deck, confirming each zlide opens cleanly.
-3. During a live session, stay in mini mode so the audience only sees the launched content while you control the pace.
-4. Jump out of order when needed by double-clicking a list entry, then return to normal progression.
+| Key | Action | Mode |
+|-----|--------|------|
+| **←** / **→** | Previous / Next zlide | Presentation |
+| **Home** / **End** | Jump to first / last zlide | Presentation |
+| **Space** | Advance to next zlide | Presentation |
+| **Escape** | Toggle mini mode | Both |
+| **Double-click** | Jump to clicked zlide | Both |
 
-## Roadmap and Ideas
+## Sample Workflow
 
-- Optional automation to close the previously opened zlide (especially for browser tabs) when advancing.
-- Thumbnail or metadata previews inside the zlide list for quicker scanning.
-- Saved presets so Zlider can auto-load a favorite `.zlides` file on launch.
-- Import/export helpers for trading decks with collaborators.
+1. **Build** - Create a zlideshow with dashboards, websites, apps, and local media
+2. **Rehearse** - Run through the deck, confirming each zlide opens cleanly
+3. **Present** - Use mini mode so the audience sees only your content while you control the pace
+4. **Cleanup** - Use "Close All Opened" to close everything when done
 
-Have feedback or feature requests? File an issue or drop notes in `Zlider_Claude_coversation.txt` before the next iteration.
+## Window Title & Display
+
+Zlider shows the current zlideshow name in multiple places:
+- **Window title bar**: `Zlider - filename`
+- **List frame header**: `Zlideshow: filename (X zlides)`
+- **Mini mode**: `📋 filename` with zlide count
+
+## Technical Notes
+
+- **Cross-platform**: Works on Windows, macOS, and Linux
+- **Process tracking**: Tracks subprocess.Popen objects for auto-close and close-all functionality
+- **Browser handling**: Uses `--new-window` flag for Chrome, Edge, Firefox to open separate windows instead of tabs
+- **Settings persistence**: Auto-close mode is saved with the zlideshow file
+
+## Changelog
+
+### v1.1 (Current)
+- Added auto-close previous zlide feature
+- Added Quick Launch section (Open All, Open Selected, Close All)
+- Added desktop application (.exe, .lnk) support as zlide type
+- Mini mode now available before starting presentation
+- Added presentation timer
+- Window title and list frame show zlideshow name
+- Settings saved in zlideshow file
+- Improved compact mode transitions
+- Enhanced process tracking for cleanup
+
+### v1.0
+- Initial release with basic presentation functionality
+- Browser and file zlide support
+- Single-window controller with mini mode
+
+---
+
+Have feedback or feature requests? File an issue on the repository.

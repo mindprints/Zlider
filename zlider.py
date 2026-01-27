@@ -224,6 +224,9 @@ class ZliderApp:
         # Track currently open process for auto-close functionality
         self.current_process: Optional[subprocess.Popen] = None
         
+        # Track all opened processes for "Close All" functionality
+        self.opened_processes: list[subprocess.Popen] = []
+        
         # Store original geometry for restoring from compact mode
         self.normal_geometry: str = "900x700"
         
@@ -240,17 +243,20 @@ class ZliderApp:
         self.create_widgets()
 
     def _setup_keybindings(self) -> None:
-        """Configure keyboard shortcuts for presentation mode."""
-        bindings: dict[str, Callable[[], None]] = {
+        """Configure keyboard shortcuts."""
+        # Navigation bindings (only work in presentation mode)
+        nav_bindings: dict[str, Callable[[], None]] = {
             "<Left>": self.previous_zlide,
             "<Right>": self.next_zlide,
             "<Home>": lambda: self.go_to_zlide(0),
             "<End>": lambda: self.go_to_zlide(len(self.zlides) - 1),
             "<space>": self.next_zlide,
-            "<Escape>": self.toggle_compact_mode,
         }
-        for key, action in bindings.items():
+        for key, action in nav_bindings.items():
             self.root.bind(key, lambda e, a=action: a() if self.presentation_mode else None)
+        
+        # Escape always works for compact mode toggle
+        self.root.bind("<Escape>", lambda e: self.toggle_compact_mode())
 
     def create_widgets(self) -> None:
         """Create and layout all UI widgets."""
@@ -275,7 +281,7 @@ class ZliderApp:
             side=tk.LEFT, padx=10, fill=tk.Y
         )
 
-        # Presentation controls (hidden initially)
+        # Presentation controls
         self.pres_controls_frame = ttk.Frame(self.toolbar)
         
         ttk.Button(
@@ -286,17 +292,30 @@ class ZliderApp:
         ).pack(side=tk.LEFT, padx=2)
 
         self.pres_controls_frame.pack(side=tk.LEFT)
+        
+        # Mini mode button (always visible)
+        ttk.Separator(self.toolbar, orient=tk.VERTICAL).pack(
+            side=tk.LEFT, padx=10, fill=tk.Y
+        )
+        
+        self.mini_btn = ttk.Button(
+            self.toolbar,
+            text="▼ Mini",
+            command=self.toggle_compact_mode,
+            width=8
+        )
+        self.mini_btn.pack(side=tk.LEFT, padx=2)
 
-        # Zlide list frame
-        list_frame = ttk.LabelFrame(self.main_frame, text="Zlideshow", padding="5")
-        list_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 5))
+        # Zlide list frame (will update title with file name)
+        self.list_frame = ttk.LabelFrame(self.main_frame, text="Zlideshow", padding="5")
+        self.list_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 5))
 
         # Zlide listbox with scrollbar
-        scrollbar = ttk.Scrollbar(list_frame)
+        scrollbar = ttk.Scrollbar(self.list_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.zlide_listbox = tk.Listbox(
-            list_frame, 
+            self.list_frame, 
             yscrollcommand=scrollbar.set, 
             height=25,
             font=('Arial', 10),
@@ -362,6 +381,13 @@ class ZliderApp:
             controls_frame, 
             text="📂 Open Selected", 
             command=self.open_selected_zlides, 
+            width=20
+        ).pack(pady=5, fill=tk.X)
+        
+        ttk.Button(
+            controls_frame, 
+            text="❌ Close All Opened", 
+            command=self.close_all_zlides, 
             width=20
         ).pack(pady=5, fill=tk.X)
         
@@ -441,14 +467,20 @@ class ZliderApp:
         self.update_status(f"Opened {count} selected zlides")
 
     def _open_zlide_without_tracking(self, zlide: Zlide) -> None:
-        """Open a zlide without process tracking (for batch operations)."""
+        """Open a zlide and track the process for Close All functionality."""
+        proc: Optional[subprocess.Popen] = None
         try:
             if zlide.type == ZlideType.BROWSER.value:
-                webbrowser.open(zlide.data)
+                # Try to get a trackable browser process
+                proc = PlatformHelper.open_browser_window(zlide.data)
             elif zlide.type == ZlideType.APP.value:
-                PlatformHelper.open_app(zlide.data)
+                proc = PlatformHelper.open_app(zlide.data)
             elif zlide.type == ZlideType.FILE.value:
-                PlatformHelper.open_file(zlide.data)
+                proc = PlatformHelper.open_file(zlide.data)
+            
+            # Track the process if we got one
+            if proc is not None:
+                self.opened_processes.append(proc)
         except Exception as e:
             print(f"Error opening {zlide.title}: {e}")
 
@@ -642,8 +674,8 @@ class ZliderApp:
                 json.dump(data, f, indent=2)
 
             self.current_file = filepath
+            self._update_window_title()
             self.update_status(f"Saved: {Path(filepath).name}")
-            messagebox.showinfo("Saved", f"Zlideshow saved to {filepath}")
 
     def open_zlideshow(self) -> None:
         """Open a zlideshow from a file."""
@@ -666,8 +698,8 @@ class ZliderApp:
                     self.auto_close_var.set(self.auto_close_mode)
                 
                 self.refresh_zlide_list()
+                self._update_window_title()
                 self.update_status(f"Loaded: {Path(filepath).name} ({len(self.zlides)} zlides)")
-                messagebox.showinfo("Loaded", f"Loaded {len(self.zlides)} zlides")
             except Exception as e:
                 messagebox.showerror("Error", f"Failed to load file: {str(e)}")
 
@@ -676,6 +708,14 @@ class ZliderApp:
         if not self.zlides:
             messagebox.showwarning("No Zlides", "No zlides in presentation")
             return
+        
+        # If already in compact mode, we need to switch to presentation compact view
+        was_compact = self.compact_mode
+        if was_compact:
+            # Destroy the editing compact frame first
+            if hasattr(self, 'compact_frame'):
+                self.compact_frame.destroy()
+            self.compact_mode = False
 
         self.presentation_mode = True
         self.current_zlide_index = 0
@@ -687,6 +727,11 @@ class ZliderApp:
         
         # Switch UI to presentation mode
         self._switch_to_presentation_mode()
+        
+        # If we were in compact mode, switch to presentation compact view
+        if was_compact:
+            self.compact_mode = True
+            self._enter_compact_mode_presentation()
         
         # Open first zlide
         self._open_zlide_with_tracking(self.zlides[0])
@@ -785,37 +830,51 @@ class ZliderApp:
 
     def _update_presentation_label(self) -> None:
         """Update the current zlide counter in presentation mode."""
-        if hasattr(self, 'current_zlide_label'):
+        if self._widget_exists('current_zlide_label'):
             self.current_zlide_label.config(
                 text=f"{self.current_zlide_index + 1}/{len(self.zlides)}"
             )
         self._update_compact_labels()
     
+    def _widget_exists(self, attr_name: str) -> bool:
+        """Check if a widget attribute exists and the widget is still valid."""
+        if not hasattr(self, attr_name):
+            return False
+        widget = getattr(self, attr_name)
+        try:
+            return widget.winfo_exists()
+        except tk.TclError:
+            return False
+    
     def _update_compact_labels(self) -> None:
         """Update all labels in compact mode."""
         if not self.compact_mode:
             return
+        
+        # Only update presentation-mode compact labels
+        if not self.presentation_mode:
+            return
             
         # Update counter
-        if hasattr(self, 'compact_zlide_label'):
+        if self._widget_exists('compact_zlide_label'):
             self.compact_zlide_label.config(
                 text=f"{self.current_zlide_index + 1}/{len(self.zlides)}"
             )
         
         # Update previous zlide
-        if hasattr(self, 'compact_prev_label'):
+        if self._widget_exists('compact_prev_label'):
             prev_text = ""
             if self.current_zlide_index > 0:
                 prev_text = f"◀ {self.zlides[self.current_zlide_index - 1].title[:30]}"
             self.compact_prev_label.config(text=prev_text)
         
         # Update current zlide
-        if hasattr(self, 'compact_current_label'):
+        if self._widget_exists('compact_current_label'):
             current_text = self.zlides[self.current_zlide_index].title[:40]
             self.compact_current_label.config(text=current_text)
         
         # Update next zlide
-        if hasattr(self, 'compact_next_label'):
+        if self._widget_exists('compact_next_label'):
             next_text = ""
             if self.current_zlide_index < len(self.zlides) - 1:
                 next_text = f"{self.zlides[self.current_zlide_index + 1].title[:30]} ▶"
@@ -880,11 +939,11 @@ class ZliderApp:
             time_str = self._format_elapsed_time()
             
             # Update main timer label
-            if hasattr(self, 'timer_label'):
+            if self._widget_exists('timer_label'):
                 self.timer_label.config(text=time_str)
             
             # Update compact timer label
-            if hasattr(self, 'compact_timer_label'):
+            if self._widget_exists('compact_timer_label'):
                 self.compact_timer_label.config(text=time_str)
             
             # Schedule next update
@@ -978,54 +1037,153 @@ class ZliderApp:
         self.status_bar.config(text=message)
         print(f"Status: {message}")
 
+    def _update_window_title(self) -> None:
+        """Update the window title and list frame with current file name."""
+        if self.current_file:
+            file_name = Path(self.current_file).stem
+            self.root.title(f"Zlider - {file_name}")
+            # Update list frame header
+            if self._widget_exists('list_frame'):
+                self.list_frame.config(text=f"Zlideshow: {file_name} ({len(self.zlides)} zlides)")
+        else:
+            self.root.title("Zlider - Presentation Tool")
+            if self._widget_exists('list_frame'):
+                self.list_frame.config(text="Zlideshow")
+
     def toggle_compact_mode(self) -> None:
-        """Toggle between compact and normal view during presentation."""
-        if not self.presentation_mode:
-            return
-        
+        """Toggle between compact and normal view (works in both editing and presentation modes)."""
         self.compact_mode = not self.compact_mode
         
         if self.compact_mode:
-            self._enter_compact_mode()
+            if self.presentation_mode:
+                self._enter_compact_mode_presentation()
+            else:
+                self._enter_compact_mode_editing()
+            # Update button to show "Full"
+            if self._widget_exists('mini_btn'):
+                self.mini_btn.config(text="▲ Full")
         else:
             self._exit_compact_mode()
         
-        self._update_compact_labels()
+        if self.presentation_mode:
+            self._update_compact_labels()
 
     def _create_compact_button(self, parent: tk.Frame, text: str, command: Callable, 
                                 width: int = 4, is_end_btn: bool = False) -> tk.Button:
         """Create a styled button for compact mode."""
+        # Common button properties
+        btn_kwargs = {
+            'text': text,
+            'command': command,
+            'width': width,
+            'fg': 'white',
+            'activeforeground': 'white',
+            'relief': tk.RAISED,
+            'bd': 1,
+        }
+        
+        # Set colors based on button type
         if is_end_btn:
-            return tk.Button(
-                parent,
-                text=text,
-                command=command,
-                width=width,
-                bg=Colors.END_BTN,
-                fg='white',
-                activebackground=Colors.END_BTN_ACTIVE,
-                activeforeground='white',
-                relief=tk.RAISED,
-                bd=1
-            )
+            btn_kwargs['bg'] = Colors.END_BTN
+            btn_kwargs['activebackground'] = Colors.END_BTN_ACTIVE
         else:
-            return tk.Button(
-                parent,
-                text=text,
-                command=command,
-                width=width,
-                bg=Colors.DARK_BTN,
-                fg='white',
-                activebackground=Colors.DARK_BTN_ACTIVE,
-                activeforeground='white',
-                relief=tk.RAISED,
-                bd=1
-            )
+            btn_kwargs['bg'] = Colors.DARK_BTN
+            btn_kwargs['activebackground'] = Colors.DARK_BTN_ACTIVE
+        
+        return tk.Button(parent, **btn_kwargs)
 
-    def _enter_compact_mode(self) -> None:
-        """Switch to compact presentation view."""
+    def _enter_compact_mode_editing(self) -> None:
+        """Switch to compact editing view (before presentation)."""
         # Save current geometry
         self.normal_geometry = self.root.geometry()
+        
+        # Hide main frame
+        self.main_frame.grid_remove()
+        
+        # Create compact frame with dark theme
+        self.compact_frame = ttk.Frame(self.root, padding="8")
+        self.compact_frame.grid(row=0, column=0, sticky="nsew")
+        
+        # Configure dark background
+        self.root.configure(bg=Colors.DARK_BG)
+        
+        # Create custom dark style
+        style = ttk.Style()
+        style.configure('Dark.TFrame', background=Colors.DARK_BG)
+        style.configure('Dark.TLabel', background=Colors.DARK_BG, foreground='white')
+        self.compact_frame.configure(style='Dark.TFrame')
+        
+        # Top row: Title and zlide count
+        info_frame = tk.Frame(self.compact_frame, bg=Colors.DARK_BG)
+        info_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        # File name or "Untitled"
+        file_name = Path(self.current_file).stem if self.current_file else "Untitled"
+        self.compact_title_label = tk.Label(
+            info_frame,
+            text=f"📋 {file_name}",
+            font=('Arial', 10, 'bold'),
+            fg=Colors.HIGHLIGHT_BLUE,
+            bg=Colors.DARK_BG
+        )
+        self.compact_title_label.pack(side=tk.LEFT, padx=5)
+        
+        # Zlide count
+        count_text = f"{len(self.zlides)} zlides" if self.zlides else "No zlides"
+        self.compact_count_label = tk.Label(
+            info_frame,
+            text=count_text,
+            font=('Arial', 9),
+            fg=Colors.MUTED_TEXT,
+            bg=Colors.DARK_BG
+        )
+        self.compact_count_label.pack(side=tk.RIGHT, padx=5)
+        
+        # Bottom row: Action buttons
+        nav_frame = tk.Frame(self.compact_frame, bg=Colors.DARK_BG)
+        nav_frame.pack()
+        
+        # Open All button
+        self._create_compact_button(
+            nav_frame, "🚀 Open All", self.open_all_zlides, width=10
+        ).pack(side=tk.LEFT, padx=2)
+        
+        # Open Selected button
+        self._create_compact_button(
+            nav_frame, "📂 Selected", self.open_selected_zlides, width=10
+        ).pack(side=tk.LEFT, padx=2)
+        
+        # Separator
+        tk.Frame(nav_frame, width=2, bg=Colors.SEPARATOR).pack(side=tk.LEFT, padx=8, fill=tk.Y)
+        
+        # Start Presentation button
+        self._create_compact_button(
+            nav_frame, "▶ Start", self.start_presentation, width=8
+        ).pack(side=tk.LEFT, padx=2)
+        
+        # Separator
+        tk.Frame(nav_frame, width=2, bg=Colors.SEPARATOR).pack(side=tk.LEFT, padx=8, fill=tk.Y)
+        
+        # Expand button
+        self._create_compact_button(
+            nav_frame, "▲ Full", self.toggle_compact_mode, width=6
+        ).pack(side=tk.LEFT, padx=2)
+        
+        # Resize window to compact size
+        self.root.geometry("550x80")
+        
+        # Update main toolbar button
+        if hasattr(self, 'mini_btn'):
+            self.mini_btn.config(text="▲ Full")
+
+    def _enter_compact_mode_presentation(self) -> None:
+        """Switch to compact presentation view."""
+        # Only save geometry if coming from full mode (not from editing compact)
+        # Check if we're at a reasonable full-mode size
+        current_geo = self.root.geometry()
+        width = int(current_geo.split('x')[0])
+        if width > 600:  # Only save if we're in full mode
+            self.normal_geometry = current_geo
         
         # Hide main frame
         self.main_frame.grid_remove()
@@ -1174,8 +1332,36 @@ class ZliderApp:
         self.root.geometry(self.normal_geometry)
         
         # Update button text
-        if hasattr(self, 'compact_btn'):
+        if self._widget_exists('compact_btn'):
             self.compact_btn.config(text="▼ Mini")
+        if self._widget_exists('mini_btn'):
+            self.mini_btn.config(text="▼ Mini")
+
+    def close_all_zlides(self) -> None:
+        """Close all tracked opened processes."""
+        closed_count = 0
+        
+        # Close current process
+        if self.current_process:
+            PlatformHelper.close_process(self.current_process)
+            self.current_process = None
+            closed_count += 1
+        
+        # Close all tracked processes
+        for proc in self.opened_processes:
+            try:
+                if proc.poll() is None:  # Process is still running
+                    PlatformHelper.close_process(proc)
+                    closed_count += 1
+            except Exception:
+                pass
+        
+        self.opened_processes.clear()
+        
+        if closed_count > 0:
+            self.update_status(f"Closed {closed_count} process(es)")
+        else:
+            self.update_status("No tracked processes to close")
 
 
 def main() -> None:
