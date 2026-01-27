@@ -46,7 +46,7 @@ class ZliderApp:
         # Store original geometry for restoring from compact mode
         self.normal_geometry = "900x700"
 
-        # Keyboard controller for automation
+        # Keyboard controller for automation currently buggy
         self.keyboard = Controller()
 
         # Configure root to stay on top when in presentation mode
