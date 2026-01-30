@@ -1,23 +1,6 @@
 """
 Zlider Workspace Edition - A presentation tool with folder-based organization.
 No more New/Open/Save - everything auto-saves to a single workspace.
-
-Migration Guide:
-----------------
-To migrate from zlider.py (v1) to zlider3.py (v2):
-
-1. First-time setup: Run zlider3.py - it will create a new workspace automatically
-2. Import existing presentations: 
-   - Click "📥 Import" button in the sidebar
-   - Select your existing .zlides files
-   - They will be imported into the current folder
-3. Your old .zlides files remain untouched - they serve as backups
-4. All changes in zlider3 are auto-saved to ~/.zlider_workspace.json
-
-Backwards Compatibility:
-- zlider.py (v1) files (.zlides) can be imported but not opened directly
-- Once imported, presentations live in the workspace
-- Both apps can coexist during transition period
 """
 
 import json
@@ -32,10 +15,6 @@ from pathlib import Path
 from tkinter import messagebox, simpledialog, ttk
 from typing import Optional, List
 import shutil
-
-# Version info for migration support
-VERSION = "2.0"
-LEGACY_VERSION = "1.0"
 
 
 class ZlideType:
@@ -58,6 +37,17 @@ class Colors:
     LIST_SELECT_BG = "#e7d2c2"
     CURRENT_ZLIDE_BG = "#dfe9f7"
     
+    # Dark theme
+    DARK_UI_BG = "#1c1c1c"
+    DARK_UI_TOOLBAR = "#242424"
+    DARK_UI_PANEL = "#2a2a2a"
+    DARK_UI_TEXT = "#e6e1da"
+    DARK_UI_MUTED = "#a29c92"
+    DARK_UI_LIST_BG = "#222222"
+    DARK_UI_LIST_SELECT_BG = "#3b2f27"
+    DARK_UI_LIST_SELECT_FG = "#f2eadf"
+    DARK_UI_CURRENT_BG = "#2a3a4a"
+    
     # Dark compact mode
     DARK_BG = "#1f1f1f"
     DARK_BTN = "#2b2b2b"
@@ -65,6 +55,11 @@ class Colors:
     HIGHLIGHT_BLUE = "#6bb9ff"
     TIMER_GREEN = "#6fe389"
     MUTED_TEXT = "#9a9a9a"
+    SEPARATOR = "#444444"
+    END_BTN = "#8b0000"
+    END_BTN_ACTIVE = "#a00000"
+    AUTO_CLOSE_ON = "#ff6b6b"
+    AUTO_CLOSE_OFF = "#666666"
 
 
 @dataclass
@@ -89,16 +84,15 @@ class Presentation:
     name: str
     zlides: List[Zlide] = field(default_factory=list)
     settings: dict = field(default_factory=dict)
+    _id: int = field(default_factory=lambda: id(object()))  # Unique ID for hashing
     
     def __hash__(self):
-        """Make Presentation hashable for use as dict key."""
-        return id(self)
+        return self._id
     
     def __eq__(self, other):
-        """Equality based on identity for hash consistency."""
-        if not isinstance(other, Presentation):
-            return False
-        return id(self) == id(other)
+        if isinstance(other, Presentation):
+            return self._id == other._id
+        return False
     
     def to_dict(self) -> dict:
         return {
@@ -121,16 +115,15 @@ class Folder:
     """A folder containing presentations."""
     name: str
     presentations: List[Presentation] = field(default_factory=list)
+    _id: int = field(default_factory=lambda: id(object()))  # Unique ID for hashing
     
     def __hash__(self):
-        """Make Folder hashable for use as dict key."""
-        return id(self)
+        return self._id
     
     def __eq__(self, other):
-        """Equality based on identity for hash consistency."""
-        if not isinstance(other, Folder):
-            return False
-        return id(self) == id(other)
+        if isinstance(other, Folder):
+            return self._id == other._id
+        return False
     
     def to_dict(self) -> dict:
         return {
@@ -245,7 +238,7 @@ class WorkspaceManager:
         """Auto-save workspace to disk."""
         try:
             data = {
-                "version": VERSION,
+                "version": "2.0",
                 "folders": [f.to_dict() for f in self.folders],
                 "recent": self.recent,
                 "settings": self.settings
@@ -290,77 +283,6 @@ class WorkspaceManager:
         self.recent.insert(0, name)
         self.recent = self.recent[:10]  # Keep last 10
         self._save_workspace()
-    
-    def import_zlides_file(self, filepath: str) -> Optional[Presentation]:
-        """Import a legacy .zlides file into the workspace.
-        
-        Args:
-            filepath: Path to the .zlides file to import
-            
-        Returns:
-            The imported Presentation, or None if import failed
-        """
-        try:
-            with open(filepath, 'r', encoding='utf-8') as f:
-                data = json.load(f)
-            
-            # Check version for compatibility
-            file_version = data.get('version', LEGACY_VERSION)
-            if file_version not in (LEGACY_VERSION, VERSION):
-                print(f"Warning: Unknown file version {file_version}, attempting import anyway")
-            
-            # Extract filename without extension as presentation name
-            from pathlib import Path
-            pres_name = Path(filepath).stem
-            
-            # Create presentation
-            presentation = Presentation(name=pres_name)
-            
-            # Import zlides - handle both old and new formats
-            for zlide_data in data.get('zlides', []):
-                # Handle legacy format where type might be an enum value
-                zlide_type = zlide_data.get('type', '')
-                if hasattr(ZlideType, zlide_type.upper()):
-                    zlide_type = getattr(ZlideType, zlide_type.upper())
-                
-                zlide = Zlide.from_dict(zlide_data)
-                presentation.zlides.append(zlide)
-            
-            # Import settings if available
-            if 'settings' in data:
-                presentation.settings = data['settings']
-            
-            return presentation
-            
-        except Exception as e:
-            print(f"Error importing .zlides file: {e}")
-            return None
-    
-    def import_all_zlides_files(self, directory: str, target_folder: Folder) -> int:
-        """Import all .zlides files from a directory into a folder.
-        
-        Args:
-            directory: Directory to search for .zlides files
-            target_folder: Folder to add presentations to
-            
-        Returns:
-            Number of presentations imported
-        """
-        import os
-        count = 0
-        
-        for filename in os.listdir(directory):
-            if filename.endswith('.zlides'):
-                filepath = os.path.join(directory, filename)
-                presentation = self.import_zlides_file(filepath)
-                if presentation:
-                    target_folder.presentations.append(presentation)
-                    count += 1
-        
-        if count > 0:
-            self._save_workspace()
-        
-        return count
 
 
 class ZliderWorkspaceApp:
@@ -381,10 +303,15 @@ class ZliderWorkspaceApp:
         self.current_zlide_index: int = -1
         self.presentation_mode: bool = False
         self.compact_mode: bool = False
+        self.normal_geometry: str = "1100x700"
+        
+        # Dark mode
+        self.dark_mode: bool = self.workspace.settings.get("dark_mode", False)
         
         # Auto-close tracking
         self.auto_close_mode: bool = self.workspace.settings.get("auto_close_mode", False)
         self.current_process: Optional[subprocess.Popen] = None
+        self.opened_processes: List[subprocess.Popen] = []
         
         # Timer
         self.presentation_start_time: Optional[datetime] = None
@@ -394,11 +321,57 @@ class ZliderWorkspaceApp:
         self.folder_nodes: dict = {}  # folder -> tree node id
         
         self._setup_keybindings()
+        self._configure_styles()
         self._create_ui()
+        self._apply_theme()
         
         # Load first folder by default
         if self.workspace.folders:
             self._select_folder(self.workspace.folders[0])
+    
+    def _configure_styles(self) -> None:
+        """Configure ttk styles."""
+        style = ttk.Style()
+        try:
+            style.theme_use("clam")
+        except tk.TclError:
+            pass
+    
+    def _apply_theme(self) -> None:
+        """Apply current theme (light/dark)."""
+        style = ttk.Style()
+        
+        if self.dark_mode:
+            bg = Colors.DARK_UI_BG
+            fg = Colors.DARK_UI_TEXT
+            panel_bg = Colors.DARK_UI_PANEL
+            list_bg = Colors.DARK_UI_LIST_BG
+            list_select = Colors.DARK_UI_LIST_SELECT_BG
+            current_bg = Colors.DARK_UI_CURRENT_BG
+        else:
+            bg = Colors.LIGHT_BG
+            fg = Colors.TEXT_MAIN
+            panel_bg = Colors.PANEL_BG
+            list_bg = Colors.LIST_BG
+            list_select = Colors.LIST_SELECT_BG
+            current_bg = Colors.CURRENT_ZLIDE_BG
+        
+        self.root.configure(bg=bg)
+        style.configure("TFrame", background=bg)
+        style.configure("TLabel", background=bg, foreground=fg)
+        style.configure("TLabelframe", background=panel_bg, foreground=fg)
+        style.configure("TLabelframe.Label", background=bg, foreground=fg)
+        
+        # Update listbox if it exists
+        if hasattr(self, 'zlide_list'):
+            self.zlide_list.configure(
+                bg=list_bg,
+                fg=fg,
+                selectbackground=list_select,
+                selectforeground=fg
+            )
+        
+        Colors.CURRENT_ZLIDE_BG = current_bg
     
     def _setup_keybindings(self) -> None:
         """Setup keyboard shortcuts."""
@@ -464,10 +437,6 @@ class ZliderWorkspaceApp:
         ttk.Button(folder_btns, text="+ Folder", command=self._add_folder, width=12).pack(side=tk.LEFT, padx=2)
         ttk.Button(folder_btns, text="+ Presentation", command=self._add_presentation, width=12).pack(side=tk.LEFT, padx=2)
         
-        # Import button for legacy files
-        import_btn = ttk.Button(folder_btns, text="📥 Import", command=self._import_zlides_file, width=12)
-        import_btn.pack(side=tk.LEFT, padx=2)
-        
         # Right panel: Current presentation
         right_panel = ttk.Frame(main_frame)
         right_panel.grid(row=1, column=1, sticky="nsew")
@@ -504,6 +473,42 @@ class ZliderWorkspaceApp:
         ttk.Button(controls, text="➕ App", command=self._add_app_zlide, width=12).pack(side=tk.LEFT, padx=2)
         ttk.Button(controls, text="🗑️ Delete", command=self._delete_zlide, width=12).pack(side=tk.LEFT, padx=2)
         
+        # Settings section
+        settings_frame = ttk.LabelFrame(right_panel, text="Settings", padding="5")
+        settings_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        settings_inner = ttk.Frame(settings_frame)
+        settings_inner.pack(fill=tk.X)
+        
+        # Auto-close checkbox
+        self.auto_close_var = tk.BooleanVar(value=self.auto_close_mode)
+        ttk.Checkbutton(
+            settings_inner,
+            text="🔄 Auto-close previous",
+            variable=self.auto_close_var,
+            command=self._on_auto_close_toggle
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Dark mode checkbox
+        self.dark_mode_var = tk.BooleanVar(value=self.dark_mode)
+        ttk.Checkbutton(
+            settings_inner,
+            text="🌙 Dark mode",
+            variable=self.dark_mode_var,
+            command=self._on_dark_mode_toggle
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Quick Launch section
+        launch_frame = ttk.LabelFrame(right_panel, text="Quick Launch", padding="5")
+        launch_frame.pack(fill=tk.X, pady=(5, 0))
+        
+        launch_btns = ttk.Frame(launch_frame)
+        launch_btns.pack()
+        
+        ttk.Button(launch_btns, text="🚀 Open All", command=self._open_all_zlides, width=12).pack(side=tk.LEFT, padx=2)
+        ttk.Button(launch_btns, text="📂 Open Selected", command=self._open_selected_zlides, width=14).pack(side=tk.LEFT, padx=2)
+        ttk.Button(launch_btns, text="❌ Close All Opened", command=self._close_all_zlides, width=16).pack(side=tk.LEFT, padx=2)
+        
         # Status bar
         self.status = ttk.Label(main_frame, text="Ready", relief=tk.SUNKEN, anchor=tk.W)
         self.status.grid(row=2, column=0, columnspan=2, sticky="ew", pady=(10, 0))
@@ -517,6 +522,98 @@ class ZliderWorkspaceApp:
         
         # Populate tree
         self._refresh_folder_tree()
+    
+    def _on_auto_close_toggle(self) -> None:
+        """Handle auto-close toggle."""
+        self.auto_close_mode = self.auto_close_var.get()
+        self.workspace.settings["auto_close_mode"] = self.auto_close_mode
+        self.workspace.save()
+        status = "enabled" if self.auto_close_mode else "disabled"
+        self.status.config(text=f"Auto-close mode {status}")
+    
+    def _on_dark_mode_toggle(self) -> None:
+        """Handle dark mode toggle."""
+        self.dark_mode = self.dark_mode_var.get()
+        self.workspace.settings["dark_mode"] = self.dark_mode
+        self.workspace.save()
+        self._apply_theme()
+        status = "enabled" if self.dark_mode else "disabled"
+        self.status.config(text=f"Dark mode {status}")
+    
+    def _open_all_zlides(self) -> None:
+        """Open all zlides in current presentation."""
+        if not self.current_presentation or not self.current_presentation.zlides:
+            messagebox.showinfo("No Zlides", "No zlides to open")
+            return
+        
+        count = len(self.current_presentation.zlides)
+        if count > 5:
+            if not messagebox.askyesno("Open All", f"Open {count} items?"):
+                return
+        
+        for zlide in self.current_presentation.zlides:
+            proc = self._open_zlide_get_process(zlide)
+            if proc:
+                self.opened_processes.append(proc)
+        
+        self.status.config(text=f"Opened {count} zlides")
+    
+    def _open_selected_zlides(self) -> None:
+        """Open selected zlides."""
+        if not self.current_presentation:
+            return
+        
+        selection = self.zlide_list.curselection()
+        if not selection:
+            messagebox.showinfo("No Selection", "Select zlides to open")
+            return
+        
+        count = 0
+        for idx in selection:
+            zlide = self.current_presentation.zlides[idx]
+            proc = self._open_zlide_get_process(zlide)
+            if proc:
+                self.opened_processes.append(proc)
+            count += 1
+        
+        self.status.config(text=f"Opened {count} selected zlides")
+    
+    def _close_all_zlides(self) -> None:
+        """Close all tracked processes."""
+        closed = 0
+        
+        # Close current
+        if self.current_process:
+            PlatformHelper.close_process(self.current_process)
+            self.current_process = None
+            closed += 1
+        
+        # Close all tracked
+        for proc in self.opened_processes:
+            try:
+                if proc.poll() is None:
+                    PlatformHelper.close_process(proc)
+                    closed += 1
+            except Exception:
+                pass
+        
+        self.opened_processes.clear()
+        
+        if closed > 0:
+            self.status.config(text=f"Closed {closed} process(es)")
+        else:
+            self.status.config(text="No tracked processes to close")
+    
+    def _open_zlide_get_process(self, zlide: Zlide) -> Optional[subprocess.Popen]:
+        """Open a zlide and return its process (for tracking)."""
+        proc = None
+        if zlide.type == ZlideType.BROWSER:
+            proc = PlatformHelper.open_browser_window(zlide.data)
+        elif zlide.type == ZlideType.FILE:
+            proc = PlatformHelper.open_file(zlide.data)
+        elif zlide.type == ZlideType.APP:
+            proc = PlatformHelper.open_app(zlide.data)
+        return proc
     
     def _refresh_folder_tree(self) -> None:
         """Refresh the folder tree view."""
@@ -620,29 +717,6 @@ class ZliderWorkspaceApp:
             self._refresh_folder_tree()
             self._select_presentation(pres)
             self.status.config(text=f"Created presentation: {name}")
-    
-    def _import_zlides_file(self) -> None:
-        """Import a legacy .zlides file into the current folder."""
-        if not self.current_folder:
-            messagebox.showwarning("No Folder", "Please select a folder first")
-            return
-        
-        from tkinter import filedialog
-        filepath = filedialog.askopenfilename(
-            title="Import .zlides File",
-            filetypes=[("Zlider presentations", "*.zlides"), ("All files", "*.*")]
-        )
-        
-        if filepath:
-            presentation = self.workspace.import_zlides_file(filepath)
-            if presentation:
-                self.current_folder.presentations.append(presentation)
-                self.workspace.save()
-                self._refresh_folder_tree()
-                self._select_presentation(presentation)
-                self.status.config(text=f"Imported: {presentation.name} ({len(presentation.zlides)} zlides)")
-            else:
-                messagebox.showerror("Import Failed", f"Could not import file:\n{filepath}")
     
     def _rename_presentation(self) -> None:
         """Rename current presentation."""
@@ -802,6 +876,7 @@ class ZliderWorkspaceApp:
     def _update_ui_for_current_zlide(self) -> None:
         """Update UI to reflect current zlide."""
         self._update_zlide_counter()
+        self._update_compact_counter()
         
         # Highlight current zlide
         self.zlide_list.selection_clear(0, tk.END)
@@ -817,16 +892,133 @@ class ZliderWorkspaceApp:
     def _update_zlide_counter(self) -> None:
         """Update the zlide counter."""
         if self.current_presentation:
-            current = max(0, self.current_zlide_index) if self.current_zlide_index >= 0 else 0
+            current = self.current_zlide_index + 1 if self.current_zlide_index >= 0 else 0
             total = len(self.current_presentation.zlides)
             self.zlide_counter.config(text=f"{current}/{total}")
         else:
             self.zlide_counter.config(text="0/0")
     
     def toggle_compact_mode(self) -> None:
-        """Toggle compact mode (simplified for now)."""
-        # For MVP, just show message
-        messagebox.showinfo("Compact Mode", "Compact mode coming soon!\n\nFor now, use the navigation buttons and keyboard shortcuts.")
+        """Toggle compact mode."""
+        self.compact_mode = not self.compact_mode
+        
+        if self.compact_mode:
+            self._enter_compact_mode()
+        else:
+            self._exit_compact_mode()
+    
+    def _enter_compact_mode(self) -> None:
+        """Enter compact/mini mode."""
+        # Save geometry
+        current_geo = self.root.geometry()
+        width = int(current_geo.split("x")[0])
+        if width > 600:
+            self.normal_geometry = current_geo
+        
+        # Hide main content
+        for widget in self.root.winfo_children():
+            widget.grid_remove()
+        
+        # Create compact frame
+        self.compact_frame = tk.Frame(self.root, bg=Colors.DARK_BG, padx=8, pady=8)
+        self.compact_frame.grid(row=0, column=0, sticky="nsew")
+        
+        # Top row: presentation info
+        info_frame = tk.Frame(self.compact_frame, bg=Colors.DARK_BG)
+        info_frame.pack(fill=tk.X, pady=(0, 8))
+        
+        # Presentation name
+        pres_name = self.current_presentation.name if self.current_presentation else "No presentation"
+        tk.Label(
+            info_frame,
+            text=f"📋 {pres_name}",
+            font=('Arial', 10, 'bold'),
+            fg=Colors.HIGHLIGHT_BLUE,
+            bg=Colors.DARK_BG
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Current zlide name
+        if self.current_presentation and self.current_zlide_index >= 0:
+            current_zlide = self.current_presentation.zlides[self.current_zlide_index]
+            tk.Label(
+                info_frame,
+                text=current_zlide.title[:40],
+                font=('Arial', 9),
+                fg=Colors.MUTED_TEXT,
+                bg=Colors.DARK_BG
+            ).pack(side=tk.LEFT, padx=10)
+        
+        # Bottom row: controls
+        controls = tk.Frame(self.compact_frame, bg=Colors.DARK_BG)
+        controls.pack()
+        
+        # Auto-close indicator
+        auto_close_color = Colors.AUTO_CLOSE_ON if self.auto_close_mode else Colors.AUTO_CLOSE_OFF
+        tk.Label(
+            controls,
+            text="🔄",
+            fg=auto_close_color,
+            bg=Colors.DARK_BG,
+            font=('Arial', 10)
+        ).pack(side=tk.LEFT, padx=5)
+        
+        # Nav buttons
+        btn_style = {
+            'bg': Colors.DARK_BTN,
+            'fg': 'white',
+            'activebackground': Colors.DARK_BTN_ACTIVE,
+            'relief': tk.RAISED,
+            'bd': 1
+        }
+        
+        tk.Button(controls, text="◀◀", command=lambda: self.go_to_zlide(0), width=4, **btn_style).pack(side=tk.LEFT, padx=1)
+        tk.Button(controls, text="◀", command=self.previous_zlide, width=4, **btn_style).pack(side=tk.LEFT, padx=1)
+        
+        # Counter
+        current = self.current_zlide_index + 1 if self.current_zlide_index >= 0 else 0
+        total = len(self.current_presentation.zlides) if self.current_presentation else 0
+        self.compact_counter = tk.Label(
+            controls,
+            text=f"{current}/{total}",
+            font=('Arial', 12, 'bold'),
+            fg=Colors.HIGHLIGHT_BLUE,
+            bg=Colors.DARK_BG,
+            width=8
+        )
+        self.compact_counter.pack(side=tk.LEFT, padx=5)
+        
+        tk.Button(controls, text="▶", command=self.next_zlide, width=4, **btn_style).pack(side=tk.LEFT, padx=1)
+        tk.Button(controls, text="▶▶", command=lambda: self.go_to_zlide(999), width=4, **btn_style).pack(side=tk.LEFT, padx=1)
+        
+        # Separator
+        tk.Frame(controls, width=2, bg=Colors.SEPARATOR).pack(side=tk.LEFT, padx=8, fill=tk.Y)
+        
+        # Expand button
+        tk.Button(controls, text="▲ Full", command=self.toggle_compact_mode, width=6, **btn_style).pack(side=tk.LEFT, padx=2)
+        
+        # Resize
+        self.root.geometry("700x80")
+        self.mini_btn.config(text="▲ Full")
+    
+    def _exit_compact_mode(self) -> None:
+        """Exit compact mode."""
+        if hasattr(self, 'compact_frame'):
+            self.compact_frame.destroy()
+        
+        # Restore main content
+        for widget in self.root.winfo_children():
+            widget.grid()
+        
+        # Restore geometry
+        self.root.geometry(self.normal_geometry)
+        self.mini_btn.config(text="▼ Mini")
+    
+    def _update_compact_counter(self) -> None:
+        """Update compact mode counter."""
+        if self.compact_mode and hasattr(self, 'compact_counter') and self.current_presentation:
+            current = self.current_zlide_index + 1 if self.current_zlide_index >= 0 else 0
+            total = len(self.current_presentation.zlides)
+            self.compact_counter.config(text=f"{current}/{total}")
 
 
 def main():
