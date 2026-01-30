@@ -397,7 +397,7 @@ class ZliderApp:
         if not self.config_path.exists():
             return
         try:
-            with open(self.config_path, "r") as f:
+            with open(self.config_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
             self.dark_mode = bool(data.get("dark_mode", self.dark_mode))
             self.auto_close_mode = bool(
@@ -1343,7 +1343,10 @@ class ZliderApp:
         self.compact_mode = not self.compact_mode
 
         if self.compact_mode:
-            self._enter_compact_mode_editing()
+            if self.presentation_mode:
+                self._enter_compact_mode_presentation()
+            else:
+                self._enter_compact_mode_editing()
             # Update button to show "Full"
             if self._widget_exists("mini_btn"):
                 self.mini_btn.config(text="▲ Full")
@@ -1553,7 +1556,11 @@ class ZliderApp:
         self.compact_next_label.pack(side=tk.RIGHT, padx=5)
 
         # Current zlide (center)
-        current_text = self.zlides[self.current_zlide_index].title[:40]
+        current_text = (
+            self.zlides[self.current_zlide_index].title[:40]
+            if self.current_zlide_index >= 0
+            else ""
+        )
         self.compact_current_label = tk.Label(
             info_frame,
             text=current_text,

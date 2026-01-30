@@ -1,0 +1,77 @@
+Analysis of Current vs. Proposed Model:
+Current State:
+
+Each presentation is a separate .zlides file
+User must navigate filesystem to open/save
+No quick switching between different presentation contexts
+Scattered files make organization difficult
+
+New workspace Model Benefits:
+
+Single source of truth: One workspace.json file
+Visual organization: Folders visible in sidebar
+Quick switching: One click to change presentations
+Auto-save: No manual save needed
+Better UX: More like Spotify playlists than Word documents
+
+Proposed Architecture:
+pythonworkspace.json structure:
+{
+  "folders": [
+    {
+      "name": "Seminars",
+      "presentations": [
+        {
+          "name": "Intro to AI",
+          "zlides": [...],
+          "settings": {...}
+        }
+      ]
+    }
+  ],
+  "recent": ["Intro to AI", "Daily Standup"],
+  "settings": {
+    "dark_mode": true,
+    "auto_close_mode": false
+  }
+}
+```
+
+**UI Changes:**
+```
+┌─────────────────────────────────────────┐
+│ Zlider Workspace         🌙 ▼Mini       │
+├──────────────┬──────────────────────────┤
+│ 📁 Folders   │ Intro to AI (7 zlides)  │
+│              │ ─────────────────────    │
+│ ▼ Seminars   │ 1. 🌐 Welcome Page      │
+│   • Intro AI │ 2. 🌐 Agenda            │
+│   • Advanced │ 3. 📄 Slides.pdf        │
+│              │ ...                      │
+│ ▶ Lectures   │ [➕ Add] [◀ Prev] [▶]   │
+│              │                          │
+│ ▼ Work       │                          │
+│   • Standup  │                          │
+│              │                          │
+│ [+ Folder]   │                          │
+│ [+ Present]  │                          │
+└──────────────┴──────────────────────────┘
+
+Phase 1: Keep backwards compatibility
+
+Add "Import .zlides file" option
+Convert existing files into workspace
+
+Phase 2: Implement workspace
+
+Folder tree on left
+Presentation view on right
+Auto-save everything
+
+Phase 3: Clean up
+
+Remove New/Open/Save buttons
+Add Export feature (for sharing individual presentations)
+
+
+
